@@ -26,6 +26,7 @@ interface TierStoreState {
     addTier: (tierIndex: number, newTier: Omit<Tier, "id" | "order">) => void;
     removeTier: (tierId: string) => void;
     deleteItem: (itemId: string) => void;
+    clearAll: () => void;
 }
 
 const initialTiers: Tier[] = [
@@ -152,6 +153,12 @@ export const useTierStore = create<TierStoreState>()(
             deleteItem: (itemId) =>
                 set((state) => ({
                     items: state.items.filter((item) => item.id !== itemId),
+                })),
+
+            clearAll: () =>
+                set(() => ({
+                    tiers: initialTiers,
+                    items: [],
                 })),
         }),
         {

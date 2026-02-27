@@ -1,10 +1,17 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import imageCompression from "browser-image-compression";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
 import { useTierStore } from "@/store/useTierStore";
 import type { Item } from "@/store/useTierStore";
 import SortableItem from "./SortableItem";
+import { useDebounce } from "@/hooks/useDebounce";
+
+interface GameResult {
+    id: string;
+    title: string;
+    imageUrl: string;
+}
 
 interface ItemPoolProps {
     items: Item[];
@@ -14,6 +21,68 @@ export default function ItemPool({ items }: ItemPoolProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const addItem = useTierStore((state) => state.addItem);
     const [isCompressing, setIsCompressing] = useState(false);
+
+    // Search state
+    const [searchQuery, setSearchQuery] = useState("");
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchResults, setSearchResults] = useState<GameResult[]>([]);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+    // Dropdown ref for click-outside
+    const searchContainerRef = useRef<HTMLDivElement>(null);
+
+    const debouncedSearchQuery = useDebounce(searchQuery, 500);
+
+    useEffect(() => {
+        if (!debouncedSearchQuery.trim()) {
+            setSearchResults([]);
+            setIsDropdownOpen(false);
+            return;
+        }
+
+        const fetchGames = async () => {
+            setIsSearching(true);
+            setIsDropdownOpen(true);
+            try {
+                const res = await fetch(`/api/search/games?q=${encodeURIComponent(debouncedSearchQuery)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setSearchResults(data.results || []);
+                } else {
+                    console.error("Failed to fetch search results");
+                    setSearchResults([]);
+                }
+            } catch (error) {
+                console.error("Error fetching games:", error);
+                setSearchResults([]);
+            } finally {
+                setIsSearching(false);
+            }
+        };
+
+        fetchGames();
+    }, [debouncedSearchQuery]);
+
+    // Handle clicks outside the dropdown
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, []);
+
+    const handleSelectGame = (game: GameResult) => {
+        addItem(game.imageUrl);
+        setSearchQuery("");
+        setSearchResults([]);
+        setIsDropdownOpen(false);
+    };
 
     const { setNodeRef, isOver } = useDroppable({
         id: "item-pool",
@@ -62,13 +131,91 @@ export default function ItemPool({ items }: ItemPoolProps) {
     return (
         <div className="w-full max-w-5xl mx-auto mt-12">
             <div className="flex items-center justify-between mb-4 px-2 tracking-wide">
-                <h2 className="text-zinc-400 text-sm font-semibold uppercase tracking-widest flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                    素材池
-                </h2>
-                <span className="text-zinc-600 text-xs font-medium">
+                <div className="flex items-center gap-6">
+                    <h2 className="text-zinc-400 text-sm font-semibold uppercase tracking-widest flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                        素材池
+                    </h2>
+
+                    {/* Inline Search UI */}
+                    <div className="relative w-64" ref={searchContainerRef}>
+                        <div className="relative flex items-center w-full h-9 rounded-full bg-white/[0.03] border border-white/10 overflow-hidden focus-within:border-white/20 focus-within:bg-white/[0.05] focus-within:ring-1 focus-within:ring-white/10 transition-all">
+                            <div className="pl-3 pr-2 text-zinc-500">
+                                {isSearching ? (
+                                    <svg className="animate-spin w-4 h-4 text-zinc-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                ) : (
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                )}
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="通过 RAWG 搜索游戏..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onFocus={() => {
+                                    if (searchQuery.trim()) setIsDropdownOpen(true);
+                                }}
+                                className="w-full h-full bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+                            />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => {
+                                        setSearchQuery("");
+                                        setSearchResults([]);
+                                        setIsDropdownOpen(false);
+                                    }}
+                                    className="pr-3 pl-2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                                >
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Dropdown Results */}
+                        {isDropdownOpen && (searchQuery.trim() !== "") && (
+                            <div className="absolute top-11 left-0 w-[300px] max-h-[300px] overflow-y-auto bg-zinc-900 border border-white/10 rounded-xl shadow-2xl z-50 py-2 custom-scrollbar">
+                                {isSearching && searchResults.length === 0 ? (
+                                    <div className="px-4 py-3 text-sm text-zinc-500 flex items-center gap-2">
+                                        搜索中...
+                                    </div>
+                                ) : searchResults.length > 0 ? (
+                                    <ul className="flex flex-col">
+                                        {searchResults.map((game) => (
+                                            <li
+                                                key={game.id}
+                                                onClick={() => handleSelectGame(game)}
+                                                className="px-3 py-2 hover:bg-white/5 cursor-pointer flex items-center gap-3 transition-colors"
+                                            >
+                                                <div
+                                                    className="w-10 h-10 rounded-md bg-zinc-800 bg-cover bg-center shrink-0 border border-white/5"
+                                                    style={{ backgroundImage: `url(${game.imageUrl})` }}
+                                                />
+                                                <span className="text-sm font-medium text-zinc-300 truncate w-full">
+                                                    {game.title}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <div className="px-4 py-3 text-sm text-zinc-500">
+                                        未找到匹配的游戏
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <span className="text-zinc-600 text-xs font-medium shrink-0">
                     {items.length} 待分类
                 </span>
             </div>

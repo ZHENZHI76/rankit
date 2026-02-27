@@ -27,25 +27,10 @@ export default function Home() {
   const isHydrated = useStoreHydration();
   const items = useTierStore((state) => state.items);
   const moveItem = useTierStore((state) => state.moveItem);
-  const addItem = useTierStore((state) => state.addItem); // Keep handy for future upload feature
   const deleteItem = useTierStore((state) => state.deleteItem);
 
   // Local state for the drag overlay
   const [activeId, setActiveId] = React.useState<string | null>(null);
-
-  // For initial dev/demo, let's inject some dummy items if the pool is empty 
-  // Normally you'd want to do this via a persistent backend or an 'Add Item' button
-  React.useEffect(() => {
-    if (items.length === 0) {
-      const colors = ["bg-purple-500", "bg-pink-500", "bg-teal-500", "bg-indigo-500", "bg-fuchsia-500"];
-      colors.forEach((c, idx) => {
-        // We're abusing addItem strictly for a quick demo of 5 items. 
-        // In real app, imageUrl would be an actual URL. Here we pass the color class to simulate images.
-        addItem(c);
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only once
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -182,12 +167,10 @@ export default function Home() {
             <DragOverlay dropAnimation={dropAnimation}>
               {activeItem ? (
                 <div className="w-24 h-24 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-2 border-white/20 bg-zinc-700 flex items-center justify-center scale-105 rotate-3 opacity-90 transition-transform cursor-grabbing overflow-hidden">
-                  {/* Quick hack to show the "color" if it's our dev data, otherwise normal image */}
-                  {activeItem.imageUrl.startsWith("bg-") ? (
-                    <div className={`w-full h-full ${activeItem.imageUrl}`} />
-                  ) : (
-                    <span className="text-xs font-medium text-white shadow-sm pointer-events-none tracking-wider">Img</span>
-                  )}
+                  <div
+                    className="w-full h-full bg-cover bg-center"
+                    style={{ backgroundImage: `url(${activeItem.imageUrl})` }}
+                  />
                 </div>
               ) : null}
             </DragOverlay>
